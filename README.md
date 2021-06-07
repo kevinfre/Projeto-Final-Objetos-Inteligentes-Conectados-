@@ -1,6 +1,6 @@
 # Projeto-Final-Objetos-Inteligentes-Conectados-
 
-O projeto se trata de um dispositivo feito com Arduíno para medir a temperatura e umidade do ambiente e transmitir esses resultados para uma página na Web .Sempre que a umidade ou temperatura tiverem maior do que o recomendado ,o Cooler Fan(pequeno ventilador) será ativado.
+O projeto se trata de um dispositivo feito com NodeMCU para medir a temperatura e umidade do ambiente e transmitir esses resultados para uma página na Web .Sempre que a umidade ou temperatura tiverem maior do que o recomendado ,o Cooler Fan(pequeno ventilador) será ativado.
 
 ## Materiais e Métodos
 **- NodeMCU ESP-32**: O NodeMCU-32S é uma plataforma de prototipagem baseada no 
