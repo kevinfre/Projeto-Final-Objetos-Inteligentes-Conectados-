@@ -1,95 +1,110 @@
-#include <SoftwareSerial.h>
-#include <dht11.h>
-#define RX 18
-#define TX 19
-#define dht_apin 11 // Analog Pin sensor is connected to
-dht11 dhtObject;
-String AP = "FGNH";       // AP NAME
-String PASS = "cp04182126"; // AP PASSWORD
-String API = "PT46QPZM2QBBDND1";   // Write API KEY
-String HOST = "api.thingspeak.com";
-String PORT = "80";
-int countTrueCommand;
-int countTimeCommand; 
-boolean found = false; 
-int valSensor = 1;
- 
-SoftwareSerial esp8266(RX,TX); 
- 
+#include <Arduino.h>
+#include "WiFi.h"
+#include "ThingSpeak.h"
+#include "DHT.h"
+
+#define DHTPIN 4 
+#define CHANNEL_ID 1403136
+#define CHANNEL_API_KEY "W0E6HKL8LRRH8I00"
+#define DHTTYPE DHT11
+
+WiFiClient client;
+
+
+DHT dht(DHTPIN, DHTTYPE);
+
+
+#define WIFI_NETWORK "FGHN"
+#define WIFI_PASSWORD "cp04182126"
+#define WIFI_TIMEOUT_MS 20000
+
+void connectToWiFi(){
+  Serial.print("Conectando ao WiFi");
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_NETWORK, WIFI_PASSWORD);
+
+
+  unsigned long startAttemptTime = millis();
+
+  while(WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < WIFI_TIMEOUT_MS){
+    Serial.print(".");
+    delay(100);
+  }
+
+  if(WiFi.status() != WL_CONNECTED){
+    Serial.println("Conexão falhou!");
+    
+  }else {
+    Serial.print("Conectado com Sucesso ao ip: ");
+    Serial.println(WiFi.localIP());
+  }
+}
+
+
+
 void setup() {
+  pinMode(2,OUTPUT);
   Serial.begin(9600);
-  esp8266.begin(9600);
- // char const *ok = "OK";
-  sendCommand("AT",5,(char*) "OK");
-  sendCommand("AT+CWMODE=1",5, (char*) "OK");
-  sendCommand("AT+CWJAP=\""+ AP +"\",\""+ PASS +"\"",20, (char*) "OK");
+  connectToWiFi();
+  ThingSpeak.begin(client);
+  Serial.println(F("Testando Sensor"));
+  dht.begin();
+  
+  
+
 }
- 
+
 void loop() {
- 
- String getData = "GET /update?api_key="+ API +"&field1="+getTemperatureValue()+"&field2="+getHumidityValue();
- sendCommand("AT+CIPMUX=1",5, (char*) "OK");
- sendCommand("AT+CIPSTART=0,\"TCP\",\""+ HOST +"\","+ PORT,15, (char*) "OK");
- sendCommand("AT+CIPSEND=0," +String(getData.length()+4),4, (char*) ">");
- esp8266.println(getData);delay(1500);countTrueCommand++;
- sendCommand("AT+CIPCLOSE=0",5, (char*)"OK");
-}
- 
- 
-String getTemperatureValue(){
- 
-   dhtObject.read(dht_apin);
-   Serial.print(" Temperature(C)= ");
-   int temp = dhtObject.temperature;
-   Serial.println(temp); 
-   delay(50);
-   return String(temp); 
- 
-}
- 
- 
-String getHumidityValue(){
- 
-   dhtObject.read(dht_apin);
-   Serial.print(" Humidity in %= ");
-   int humidity = dhtObject.humidity;
-   Serial.println(humidity);
-   delay(50);
-   return String(humidity); 
- 
-}
- 
-void sendCommand(String command, int maxTime, char readReplay[]) {
-  Serial.print(countTrueCommand);
-  Serial.print(". at command => ");
-  Serial.print(command);
-  Serial.print(" ");
-  while(countTimeCommand < (maxTime*1))
-  {
-    esp8266.println(command);//at+cipsend
-    Serial.print(esp8266.readString());
-    if(esp8266.find(readReplay))//ok
-    {
-      found = true;
-      break;
-    }
- 
-    countTimeCommand++;
+  
+  // Lendo umidade
+  float h = dht.readHumidity();
+  // Lendo temperatura como Celsius
+  float t = dht.readTemperature();
+  // Ler temperatura como Fahrenheit caso esteja true (isFahrenheit = true)
+  float f = dht.readTemperature(true);
+
+  // Checando se alguma leitura falhou.
+  if (isnan(h) || isnan(t) || isnan(f)) {
+    Serial.println(F("Failed to read from DHT sensor!"));
+    return;
   }
- 
-  if(found == true)
-  {
-    Serial.println("OYI");
-    countTrueCommand++;
-    countTimeCommand = 0;
+
+  // Caso a temperatura seja maior ou igual a X, é enviado
+  // um sinal para o relé ser ligado no HIGH. Com isso liga
+  // a ventoinha.
+  
+  if ( t >= 28){
+    digitalWrite(2,HIGH);
+    delay(500);
+  } else {
+    digitalWrite(2,LOW);
+    delay(500);
   }
- 
-  if(found == false)
-  {
-    Serial.println("Fail");
-    countTrueCommand = 0;
-    countTimeCommand = 0;
-  }
- 
-  found = false;
- }
+
+  // Mostra a sensação térmica em Farenheit
+  float hif = dht.computeHeatIndex(f, h);
+  // Mostra a sensação térmica em Celsius (isFahreheit = false)
+  float hic = dht.computeHeatIndex(t, h, false);
+
+  Serial.print(F("Umidade: "));
+  Serial.print(h);
+  Serial.print(F("%  Temperatura: "));
+  Serial.print(t);
+  Serial.print(F("°C "));
+  Serial.print(f);
+  Serial.print(F("°F  Sensação térmica: "));
+  Serial.print(hic);
+  Serial.print(F("°C "));
+  Serial.print(hif);
+  Serial.println(F("°F"));
+
+  
+  ThingSpeak.setField(1,h);
+  ThingSpeak.setField(2,t);
+
+  ThingSpeak.writeFields(CHANNEL_ID, CHANNEL_API_KEY);
+  
+
+  delay(15000);
+  
+}
